@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tanques Multiplayer Firebase</title>
+    <!-- Librerías Externas (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        /* ESTILOS GENERALES Y RESET */
+        * { box-sizing: border-box; touch-action: none; user-select: none; }
+        body { margin: 0; padding: 0; background: #222; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        
+        /* PANTALLAS */
+        .screen { display: none; width: 100vw; height: 100vh; flex-direction: column; align-items: center; justify-content: center; position: absolute; top: 0; left: 0; }
+        .active { display: flex; }
+
+        /* MENU PRINCIPAL */
+        #menu-screen { background: #1a1a1a; z-index: 10; text-align: center; }
+        h1 { font-size: 3rem; margin-bottom: 20px; color: #4CAF50; text-transform: uppercase; letter-spacing: 5px; }
+        .btn { padding: 15px 30px; font-size: 1.2rem; background: #4CAF50; border: none; color: white; cursor: pointer; border-radius: 5px; margin: 10px; transition: 0.3s; }
+        .btn:hover { background: #45a049; }
+        input { padding: 15px; font-size: 1.2rem; border-radius: 5px; border: none; text-align: center; margin: 10px; width: 250px; }
+
+        /* MODO PANTALLA (BATTLEFIELD) */
+        #game-screen { background: #333; position: relative; }
+        #canvas-container { position: relative; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        canvas { background: #1a1a1a; border: 2px solid #555; }
+        #lobby-info { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; pointer-events: none; }
+        #qrcode { margin-top: 10px; background: white; padding: 5px; display: inline-block; }
+        .room-code { font-size: 3rem; font-weight: bold; color: yellow; font-family: monospace; }
+        .player-list { margin-top: 20px; font-size: 0.9rem; }
+
+        /* MODO CONTROL (MÓVIL) */
+        #controller-screen { background: #222; display: none; } /* Flex via JS */
+        .joystick-area { width: 100%; height: 100%; position: relative; display: flex; }
+        .control-panel { display: flex; width: 100%; height: 100%; justify-content: space-between; align-items: center; padding: 20px; }
+        
+        /* Joystick Visual */
+        #joystick-zone { width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.2); }
+        #joystick-stick { width: 80px; height: 80px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        
+        /* Botón Disparo */
+        #btn-shoot { width: 120px; height: 120px; background: #ff4444; border-radius: 50%; border: 4px solid #cc0000; box-shadow: 0 5px 15px rgba(0,0,0,0.3); font-weight: bold; font-size: 1.2rem; color: white; display: flex; align-items: center; justify-content: center; }
+        #btn-shoot:active { background: #cc0000; transform: scale(0.95); }
+
+        /* Estado Jugador en Móvil */
+        .mobile-status { position: absolute; top: 10px; left: 0; width: 100%; text-align: center; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA 1: MENÚ -->
+    <div id="menu-screen" class="screen active">
+        <h1>Tank Battle</h1>
+        <div id="selection-area">
+            <button class="btn" onclick="initHostMode()">📺 Crear Sala (Pantalla)</button>
+            <br>
+            <div style="margin-top:20px; border-top: 1px solid #444; padding-top:20px;">
+                <input type="text" id="room-input" placeholder="Código de Sala" maxlength="6">
+                <br>
+                <input type="text" id="name-input" placeholder="Tu Nombre" maxlength="10">
+                <br>
+                <button class="btn" onclick="initClientMode()">🎮 Unirse (Mando)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA 2: JUEGO (HOST/DESKTOP) -->
+    <div id="game-screen" class="screen">
+        <div id="canvas-container">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        <div id="lobby-info">
+            <div>SALA: <span id="display-room-code" class="room-code">------</span></div>
+            <div>Jugadores conectados: <span id="player-count">0</span></div>
+            <div id="qrcode"></div>
+            <div class="player-list" id="score-board"></div>
+        </div>
+    </div>
+
+    <!-- PANTALLA 3: CONTROL (CLIENTE/MÓVIL) -->
+    <div id="controller-screen" class="screen">
+        <div class="mobile-status">
+            <h3 id="ctrl-player-name">Jugador</h3>
+            <span id="ctrl-lives">❤❤❤</span>
+        </div>
+        <div class="control-panel">
+            <div id="joystick-zone">
+                <div id="joystick-stick"></div>
+            </div>
+            <div id="shoot-zone">
+                <div id="btn-shoot">FIRE</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN (Rellena esto)
+        // ==========================================
+        const firebaseConfig = {
+        apiKey: "AIzaSyBb4BGWFS5a2RA1jfyW-z1m-Ai9sMgx3yk",
+        authDomain: "tanksgame-5ac51.firebaseapp.com",
+        databaseURL: "https://tanksgame-5ac51-default-rtdb.firebaseio.com",
+        projectId: "tanksgame-5ac51",
+        storageBucket: "tanksgame-5ac51.firebasestorage.app",
+        messagingSenderId: "416121252286",
+        appId: "1:416121252286:web:bc4ed5cd9b5fdd58e771ef",
+        measurementId: "G-7FB4L3C5ZW"
+        };
+        
+        // Inicializar Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        // ==========================================
+        // VARIABLES GLOBALES
+        // ==========================================
+        let roomId = null;
+        let playerId = null;
+        let isHost = false;
+        let gameLoopRef;
+        const players = {};
+        const bullets = [];
+        
+        // Referencias DOM
+        const screens = {
+            menu: document.getElementById('menu-screen'),
+            game: document.getElementById('game-screen'),
+            ctrl: document.getElementById('controller-screen')
+        };
+
+        // ==========================================
+        // LÓGICA DE INICIO Y NAVEGACIÓN
+        // ==========================================
+        
+        // Detectar URL param para autocompletar sala
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('sala')) {
+            document.getElementById('room-input').value = urlParams.get('sala');
+        }
+
+        function showScreen(name) {
+            Object.values(screens).forEach(s => s.classList.remove('active', 'active-flex'));
+            screens[name].classList.add('active');
+            if(name === 'ctrl') screens[name].style.display = 'flex'; // Fix para flexbox
+        }
+
+        // ==========================================
+        // MODO HOST (PANTALLA)
+        // ==========================================
+        function initHostMode() {
+            isHost = true;
+            // Generar ID de sala
+            roomId = Math.floor(100000 + Math.random() * 900000).toString();
+            
+            // Configurar UI
+            showScreen('game');
+            document.getElementById('display-room-code').innerText = roomId;
+            
+            // Generar QR
+            const gameUrl = `${window.location.origin}${window.location.pathname}?sala=${roomId}`;
+            new QRCode(document.getElementById("qrcode"), {
+                text: gameUrl,
+                width: 128,
+                height: 128
+            });
+
+            // Iniciar Canvas y Firebase Listeners
+            initGameCanvas();
+            setupHostFirebase();
+        }
+
+        function setupHostFirebase() {
+            const roomRef = db.ref(`salas/${roomId}`);
+            
+            // Limpiar sala anterior si existe
+            roomRef.set({ created: Date.now() });
+
+            // Escuchar nuevos jugadores
+            roomRef.child('jugadores').on('child_added', (snapshot) => {
+                const pInfo = snapshot.val();
+                players[snapshot.key] = {
+                    id: snapshot.key,
+                    x: Math.random() * (canvas.width - 50) + 25,
+                    y: Math.random() * (canvas.height - 50) + 25,
+                    color: pInfo.color,
+                    nombre: pInfo.nombre,
+                    angle: 0,
+                    lives: 3,
+                    input: { x: 0, y: 0, shoot: false }
+                };
+                updateScoreboard();
+            });
+
+            // Escuchar cambios de input de jugadores (Movimiento)
+            roomRef.child('jugadores').on('child_changed', (snapshot) => {
+                const id = snapshot.key;
+                const data = snapshot.val();
+                if (players[id] && data.input) {
+                    players[id].input = data.input;
+                }
+            });
+
+            // Escuchar desconexiones
+            roomRef.child('jugadores').on('child_removed', (snapshot) => {
+                delete players[snapshot.key];
+                updateScoreboard();
+            });
+
+            // Game Loop Start
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ==========================================
+        // MODO CLIENTE (MANDO)
+        // ==========================================
+        function initClientMode() {
+            const roomCode = document.getElementById('room-input').value;
+            const name = document.getElementById('name-input').value || "Jugador";
+            
+            if (roomCode.length !== 6) return alert("Código de sala inválido");
+
+            roomId = roomCode;
+            playerId = 'p_' + Math.random().toString(36).substr(2, 9);
+            
+            const playerColor = `hsl(${Math.random() * 360}, 70%, 50%)`;
+
+            // Unirse a Firebase
+            const playerRef = db.ref(`salas/${roomId}/jugadores/${playerId}`);
+            
+            playerRef.set({
+                nombre: name,
+                color: playerColor,
+                input: { x: 0, y: 0, shoot: false },
+                lives: 3
+            }).then(() => {
+                showScreen('ctrl');
+                document.getElementById('ctrl-player-name').innerText = name;
+                document.getElementById('ctrl-player-name').style.color = playerColor;
+                setupControllerLogic(playerRef);
+            }).catch(e => alert("Error conectando: " + e.message));
+
+            // Manejar desconexión
+            playerRef.onDisconnect().remove();
+
+            // Escuchar mis propias vidas (para actualizar UI del móvil)
+            playerRef.child('lives').on('value', snap => {
+                const lives = snap.val();
+                document.getElementById('ctrl-lives').innerText = "❤".repeat(lives || 0);
+                if (lives <= 0) alert("¡Has muerto! Respawning...");
+            });
+        }
+
+        function setupControllerLogic(playerRef) {
+            const stick = document.getElementById('joystick-stick');
+            const zone = document.getElementById('joystick-zone');
+            const btnShoot = document.getElementById('btn-shoot');
+            
+            let dragStart = null;
+            let currentPos = { x: 0, y: 0 };
+            
+            // Función para enviar input (Throttle básico para no saturar)
+            let lastUpdate = 0;
+            function sendInput(shootOverride = false) {
+                const now = Date.now();
+                if (now - lastUpdate > 50 || shootOverride) { // Max 20 actualizaciones por segundo
+                    // Normalizar vector (-1 a 1)
+                    const maxDist = 50; // radio del joystick visual
+                    const inputX = currentPos.x / maxDist;
+                    const inputY = currentPos.y / maxDist;
+                    
+                    playerRef.update({
+                        input: { 
+                            x: parseFloat(inputX.toFixed(2)), 
+                            y: parseFloat(inputY.toFixed(2)),
+                            shoot: shootOverride
+                        }
+                    });
+                    lastUpdate = now;
+                }
+            }
+
+            // Joystick Touch Logic
+            zone.addEventListener('touchstart', e => {
+                dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                stick.style.transition = 'none';
+            });
+
+            zone.addEventListener('touchmove', e => {
+                if (!dragStart) return;
+                const touch = e.touches[0];
+                let dx = touch.clientX - dragStart.x;
+                let dy = touch.clientY - dragStart.y;
+                
+                // Limitar distancia
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const maxDist = 50;
+                if (distance > maxDist) {
+                    dx = (dx / distance) * maxDist;
+                    dy = (dy / distance) * maxDist;
+                }
+                
+                currentPos = { x: dx, y: dy };
+                stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                sendInput();
+            });
+
+            const endDrag = () => {
+                dragStart = null;
+                currentPos = { x: 0, y: 0 };
+                stick.style.transition = '0.2s';
+                stick.style.transform = `translate(-50%, -50%)`;
+                sendInput();
+            };
+
+            zone.addEventListener('touchend', endDrag);
+            zone.addEventListener('touchcancel', endDrag);
+
+            // Botón Disparo
+            btnShoot.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                sendInput(true); // Enviar shoot=true
+                setTimeout(() => sendInput(false), 100); // Reset rápido
+            });
+        }
+
+        // ==========================================
+        // MOTOR DE JUEGO (CANVAS - SOLO HOST)
+        // ==========================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function initGameCanvas() {
+            canvas.width = window.innerWidth * 0.9;
+            canvas.height = window.innerHeight * 0.8;
+        }
+
+        function gameLoop() {
+            // Limpiar
+            ctx.fillStyle = "#333";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Actualizar y Dibujar Jugadores
+            Object.values(players).forEach(p => {
+                if (p.lives <= 0) return; // Si está muerto espera respawn
+
+                // Movimiento basado en input remoto
+                const speed = 4;
+                if (Math.abs(p.input.x) > 0.1 || Math.abs(p.input.y) > 0.1) {
+                    p.x += p.input.x * speed;
+                    p.y += p.input.y * speed;
+                    p.angle = Math.atan2(p.input.y, p.input.x);
+                }
+
+                // Límites de pantalla
+                p.x = Math.max(20, Math.min(canvas.width - 20, p.x));
+                p.y = Math.max(20, Math.min(canvas.height - 20, p.y));
+
+                // Disparo
+                if (p.input.shoot && (!p.lastShot || Date.now() - p.lastShot > 500)) {
+                    bullets.push({
+                        x: p.x,
+                        y: p.y,
+                        vx: Math.cos(p.angle) * 8,
+                        vy: Math.sin(p.angle) * 8,
+                        owner: p.id,
+                        color: p.color
+                    });
+                    p.lastShot = Date.now();
+                }
+
+                // Dibujar Tanque
+                drawTank(p);
+            });
+
+            // 2. Actualizar y Dibujar Balas
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Dibujar bala
+                ctx.fillStyle = b.color;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Fuera de pantalla
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Colisiones
+                Object.values(players).forEach(p => {
+                    if (p.id !== b.owner && p.lives > 0) {
+                        const dx = p.x - b.x;
+                        const dy = p.y - b.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < 25) { // Radio de colisión
+                            // Impacto!
+                            bullets.splice(i, 1);
+                            handleHit(p.id);
+                        }
+                    }
+                });
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawTank(p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            
+            // Cuerpo
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-20, -15, 40, 30);
+            
+            // Cañón
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, -5, 30, 10);
+            
+            // Orugas
+            ctx.fillStyle = "#000";
+            ctx.fillRect(-20, -20, 40, 5);
+            ctx.fillRect(-20, 15, 40, 5);
+
+            ctx.restore();
+
+            // Nombre y Vidas
+            ctx.fillStyle = "white";
+            ctx.font = "12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(p.nombre, p.x, p.y - 30);
+            
+            // Barra de vida
+            ctx.fillStyle = "red";
+            ctx.fillRect(p.x - 15, p.y - 25, 30, 4);
+            ctx.fillStyle = "#0f0";
+            ctx.fillRect(p.x - 15, p.y - 25, 30 * (p.lives / 3), 4);
+        }
+
+        function handleHit(targetId) {
+            if (!players[targetId]) return;
+            
+            players[targetId].lives--;
+            
+            // Actualizar vidas en Firebase (para que el móvil sepa)
+            db.ref(`salas/${roomId}/jugadores/${targetId}/lives`).set(players[targetId].lives);
+
+            if (players[targetId].lives <= 0) {
+                // Respawn simple
+                setTimeout(() => {
+                    if(players[targetId]) {
+                        players[targetId].lives = 3;
+                        players[targetId].x = Math.random() * canvas.width;
+                        players[targetId].y = Math.random() * canvas.height;
+                        db.ref(`salas/${roomId}/jugadores/${targetId}/lives`).set(3);
+                        updateScoreboard();
+                    }
+                }, 3000);
+            }
+            updateScoreboard();
+        }
+
+        function updateScoreboard() {
+            const board = document.getElementById('score-board');
+            let html = "<h3>Marcador</h3>";
+            Object.values(players).forEach(p => {
+                html += `<div style="color:${p.color}">${p.nombre}: ${p.lives} ❤</div>`;
+            });
+            board.innerHTML = html;
+            document.getElementById('player-count').innerText = Object.keys(players).length;
+        }
+
+    </script>
+</body>
+</html>
