@@ -3,91 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tanques Multiplayer Firebase</title>
-    <!-- Librerías Externas (CDN) -->
+    <title>Tanques Battle Royale</title>
+    <!-- Librerías Externas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        /* ESTILOS GENERALES Y RESET */
+        /* ESTILOS GENERALES */
         * { box-sizing: border-box; touch-action: none; user-select: none; }
-        body { margin: 0; padding: 0; background: #222; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        body { margin: 0; padding: 0; background: #222; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         
-        /* PANTALLAS */
         .screen { display: none; width: 100vw; height: 100vh; flex-direction: column; align-items: center; justify-content: center; position: absolute; top: 0; left: 0; }
         .active { display: flex; }
 
-        /* MENU PRINCIPAL */
+        /* UI MENÚ */
         #menu-screen { background: #1a1a1a; z-index: 10; text-align: center; }
-        h1 { font-size: 3rem; margin-bottom: 20px; color: #4CAF50; text-transform: uppercase; letter-spacing: 5px; }
-        .btn { padding: 15px 30px; font-size: 1.2rem; background: #4CAF50; border: none; color: white; cursor: pointer; border-radius: 5px; margin: 10px; transition: 0.3s; }
-        .btn:hover { background: #45a049; }
+        h1 { font-size: 3rem; color: #4CAF50; margin-bottom: 10px; }
+        .btn { padding: 15px 30px; font-size: 1.2rem; background: #4CAF50; border: none; color: white; border-radius: 5px; margin: 10px; cursor: pointer; }
         input { padding: 15px; font-size: 1.2rem; border-radius: 5px; border: none; text-align: center; margin: 10px; width: 250px; }
 
-        /* MODO PANTALLA (BATTLEFIELD) */
+        /* UI JUEGO (HOST) */
         #game-screen { background: #333; position: relative; }
-        #canvas-container { position: relative; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
-        canvas { background: #1a1a1a; border: 2px solid #555; }
+        canvas { background: #1a1a1a; border: 2px solid #555; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
         #lobby-info { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; pointer-events: none; }
         #qrcode { margin-top: 10px; background: white; padding: 5px; display: inline-block; }
-        .room-code { font-size: 3rem; font-weight: bold; color: yellow; font-family: monospace; }
-        .player-list { margin-top: 20px; font-size: 0.9rem; }
+        .room-code { font-size: 3rem; color: yellow; font-family: monospace; font-weight: bold; }
 
-        /* MODO CONTROL (MÓVIL) */
-        #controller-screen { background: #222; display: none; } /* Flex via JS */
-        .joystick-area { width: 100%; height: 100%; position: relative; display: flex; }
+        /* PANTALLA GANADOR (OVERLAY) */
+        #winner-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        #winner-name { font-size: 5rem; color: #FFD700; text-shadow: 0 0 20px #FFD700; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* UI CONTROL (MÓVIL) */
+        #controller-screen { background: #222; }
         .control-panel { display: flex; width: 100%; height: 100%; justify-content: space-between; align-items: center; padding: 20px; }
-        
-        /* Joystick Visual */
-        #joystick-zone { width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.2); }
-        #joystick-stick { width: 80px; height: 80px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-        
-        /* Botón Disparo */
-        #btn-shoot { width: 120px; height: 120px; background: #ff4444; border-radius: 50%; border: 4px solid #cc0000; box-shadow: 0 5px 15px rgba(0,0,0,0.3); font-weight: bold; font-size: 1.2rem; color: white; display: flex; align-items: center; justify-content: center; }
+        #joystick-zone { width: 180px; height: 180px; background: rgba(255,255,255,0.1); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.2); }
+        #joystick-stick { width: 70px; height: 70px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #btn-shoot { width: 100px; height: 100px; background: #ff4444; border-radius: 50%; border: 4px solid #cc0000; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; }
         #btn-shoot:active { background: #cc0000; transform: scale(0.95); }
 
-        /* Estado Jugador en Móvil */
-        .mobile-status { position: absolute; top: 10px; left: 0; width: 100%; text-align: center; pointer-events: none; }
+        /* ESTADO MÓVIL */
+        .mobile-top-bar { position: absolute; top: 0; width: 100%; padding: 10px; display: flex; justify-content: space-between; background: rgba(0,0,0,0.5); font-weight: bold; }
+        
+        /* PANTALLA DERROTA MÓVIL */
+        #dead-screen { display: none; width: 100%; height: 100%; background: #220000; color: red; flex-direction: column; justify-content: center; align-items: center; position: absolute; top:0; left:0; z-index: 50; }
+        #dead-screen h1 { font-size: 3rem; margin: 0; }
     </style>
 </head>
 <body>
 
-    <!-- PANTALLA 1: MENÚ -->
+    <!-- MENÚ PRINCIPAL -->
     <div id="menu-screen" class="screen active">
-        <h1>Tank Battle</h1>
-        <div id="selection-area">
-            <button class="btn" onclick="initHostMode()">📺 Crear Sala (Pantalla)</button>
+        <h1>TANK BATTLE 2.0</h1>
+        <button class="btn" onclick="initHostMode()">📺 Crear Sala (Pantalla)</button>
+        <div style="border-top: 1px solid #444; margin: 20px; padding: 20px;">
+            <input type="text" id="room-input" placeholder="Código" maxlength="6">
+            <input type="text" id="name-input" placeholder="Tu Nombre" maxlength="10">
             <br>
-            <div style="margin-top:20px; border-top: 1px solid #444; padding-top:20px;">
-                <input type="text" id="room-input" placeholder="Código de Sala" maxlength="6">
-                <br>
-                <input type="text" id="name-input" placeholder="Tu Nombre" maxlength="10">
-                <br>
-                <button class="btn" onclick="initClientMode()">🎮 Unirse (Mando)</button>
-            </div>
+            <button class="btn" onclick="initClientMode()">🎮 Unirse</button>
         </div>
     </div>
 
-    <!-- PANTALLA 2: JUEGO (HOST/DESKTOP) -->
+    <!-- PANTALLA DE JUEGO (HOST) -->
     <div id="game-screen" class="screen">
-        <div id="canvas-container">
-            <canvas id="gameCanvas"></canvas>
-        </div>
+        <canvas id="gameCanvas"></canvas>
+        
         <div id="lobby-info">
             <div>SALA: <span id="display-room-code" class="room-code">------</span></div>
-            <div>Jugadores conectados: <span id="player-count">0</span></div>
+            <div>Jugadores: <span id="player-count">0</span></div>
             <div id="qrcode"></div>
-            <div class="player-list" id="score-board"></div>
+            <div id="score-board" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- Overlay de Ganador -->
+        <div id="winner-overlay">
+            <h2 style="color:white">¡TENEMOS UN GANADOR!</h2>
+            <div id="winner-name">JUGADOR</div>
+            <button class="btn" onclick="location.reload()" style="margin-top:50px;">Nueva Partida</button>
         </div>
     </div>
 
-    <!-- PANTALLA 3: CONTROL (CLIENTE/MÓVIL) -->
+    <!-- PANTALLA DE MANDO (CLIENTE) -->
     <div id="controller-screen" class="screen">
-        <div class="mobile-status">
-            <h3 id="ctrl-player-name">Jugador</h3>
-            <span id="ctrl-lives">❤❤❤</span>
+        <!-- Overlay Muerte -->
+        <div id="dead-screen">
+            <h1>PERDISTE</h1>
+            <p>Espera a que termine la partida...</p>
         </div>
+
+        <!-- Overlay Ganador Móvil -->
+        <div id="mobile-win-screen" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:#002200; z-index:60; flex-direction:column; justify-content:center; align-items:center;">
+            <h1 style="color:#0f0; font-size:3rem;">¡GANASTE!</h1>
+            <p>Eres el último superviviente</p>
+        </div>
+
+        <div class="mobile-top-bar">
+            <span id="ctrl-name">Jugador</span>
+            <span>HP: <span id="ctrl-hp">❤️❤️</span></span>
+        </div>
+
         <div class="control-panel">
             <div id="joystick-zone">
                 <div id="joystick-stick"></div>
@@ -100,35 +115,42 @@
 
     <script>
         // ==========================================
-        // CONFIGURACIÓN (Rellena esto)
+        // CONFIGURACIÓN FIREBASE (REEMPLAZAR AQUÍ)
         // ==========================================
         const firebaseConfig = {
-        apiKey: "AIzaSyBb4BGWFS5a2RA1jfyW-z1m-Ai9sMgx3yk",
-        authDomain: "tanksgame-5ac51.firebaseapp.com",
-        databaseURL: "https://tanksgame-5ac51-default-rtdb.firebaseio.com",
-        projectId: "tanksgame-5ac51",
-        storageBucket: "tanksgame-5ac51.firebasestorage.app",
-        messagingSenderId: "416121252286",
-        appId: "1:416121252286:web:bc4ed5cd9b5fdd58e771ef",
-        measurementId: "G-7FB4L3C5ZW"
+  apiKey: "AIzaSyBb4BGWFS5a2RA1jfyW-z1m-Ai9sMgx3yk",
+  authDomain: "tanksgame-5ac51.firebaseapp.com",
+  databaseURL: "https://tanksgame-5ac51-default-rtdb.firebaseio.com",
+  projectId: "tanksgame-5ac51",
+  storageBucket: "tanksgame-5ac51.firebasestorage.app",
+  messagingSenderId: "416121252286",
+  appId: "1:416121252286:web:bc4ed5cd9b5fdd58e771ef",
+  measurementId: "G-7FB4L3C5ZW"
         };
-        
-        // Inicializar Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
         // ==========================================
-        // VARIABLES GLOBALES
+        // CONFIGURACIÓN DEL JUEGO
         // ==========================================
+        const CONFIG = {
+            MAX_LIVES: 2,      // Total de vidas (corazones)
+            HITS_PER_LIFE: 3,  // Golpes necesarios para perder 1 vida
+            SPEED: 4,
+            BULLET_SPEED: 8
+        };
+
+        // Variables Globales
         let roomId = null;
         let playerId = null;
         let isHost = false;
-        let gameLoopRef;
-        const players = {};
-        const bullets = [];
+        let gameActive = true;
         
+        // Estado local del Host
+        const players = {}; 
+        const bullets = [];
+
         // Referencias DOM
         const screens = {
             menu: document.getElementById('menu-screen'),
@@ -136,54 +158,40 @@
             ctrl: document.getElementById('controller-screen')
         };
 
-        // ==========================================
-        // LÓGICA DE INICIO Y NAVEGACIÓN
-        // ==========================================
-        
-        // Detectar URL param para autocompletar sala
+        // Detectar Sala en URL
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('sala')) {
-            document.getElementById('room-input').value = urlParams.get('sala');
-        }
+        if (urlParams.has('sala')) document.getElementById('room-input').value = urlParams.get('sala');
 
         function showScreen(name) {
-            Object.values(screens).forEach(s => s.classList.remove('active', 'active-flex'));
+            Object.values(screens).forEach(s => s.classList.remove('active'));
             screens[name].classList.add('active');
-            if(name === 'ctrl') screens[name].style.display = 'flex'; // Fix para flexbox
+            if(name === 'ctrl') screens[name].style.display = 'flex';
         }
 
         // ==========================================
-        // MODO HOST (PANTALLA)
+        // LÓGICA HOST (PANTALLA)
         // ==========================================
         function initHostMode() {
             isHost = true;
-            // Generar ID de sala
             roomId = Math.floor(100000 + Math.random() * 900000).toString();
             
-            // Configurar UI
             showScreen('game');
             document.getElementById('display-room-code').innerText = roomId;
             
-            // Generar QR
-            const gameUrl = `${window.location.origin}${window.location.pathname}?sala=${roomId}`;
             new QRCode(document.getElementById("qrcode"), {
-                text: gameUrl,
-                width: 128,
-                height: 128
+                text: `${window.location.origin}${window.location.pathname}?sala=${roomId}`,
+                width: 100, height: 100
             });
 
-            // Iniciar Canvas y Firebase Listeners
             initGameCanvas();
             setupHostFirebase();
         }
 
         function setupHostFirebase() {
             const roomRef = db.ref(`salas/${roomId}`);
-            
-            // Limpiar sala anterior si existe
-            roomRef.set({ created: Date.now() });
+            roomRef.set({ status: "waiting", created: Date.now() });
 
-            // Escuchar nuevos jugadores
+            // Jugador entra
             roomRef.child('jugadores').on('child_added', (snapshot) => {
                 const pInfo = snapshot.val();
                 players[snapshot.key] = {
@@ -193,225 +201,208 @@
                     color: pInfo.color,
                     nombre: pInfo.nombre,
                     angle: 0,
-                    lives: 3,
-                    input: { x: 0, y: 0, shoot: false }
+                    // NUEVO SISTEMA DE VIDAS
+                    lives: CONFIG.MAX_LIVES,
+                    currentHp: CONFIG.HITS_PER_LIFE, // 3 golpes por vida
+                    input: { x: 0, y: 0, shoot: false },
+                    isDead: false
                 };
                 updateScoreboard();
             });
 
-            // Escuchar cambios de input de jugadores (Movimiento)
-            roomRef.child('jugadores').on('child_changed', (snapshot) => {
-                const id = snapshot.key;
-                const data = snapshot.val();
-                if (players[id] && data.input) {
-                    players[id].input = data.input;
+            // Input
+            roomRef.child('jugadores').on('child_changed', (snap) => {
+                const id = snap.key;
+                if (players[id] && snap.val().input) {
+                    players[id].input = snap.val().input;
                 }
             });
 
-            // Escuchar desconexiones
-            roomRef.child('jugadores').on('child_removed', (snapshot) => {
-                delete players[snapshot.key];
+            // Desconexión
+            roomRef.child('jugadores').on('child_removed', (snap) => {
+                delete players[snap.key];
                 updateScoreboard();
+                checkWinner(); // Comprobar si al salir alguien gana otro
             });
 
-            // Game Loop Start
             requestAnimationFrame(gameLoop);
         }
 
+        function checkWinner() {
+            // Solo comprobar si hay juego activo y al menos hubo 2 jugadores alguna vez
+            const activePlayers = Object.values(players).filter(p => !p.isDead);
+            const totalPlayers = Object.keys(players).length;
+
+            if (gameActive && totalPlayers > 1 && activePlayers.length === 1) {
+                // GANADOR ENCONTRADO
+                const winner = activePlayers[0];
+                gameActive = false;
+                
+                // Mostrar en pantalla grande
+                document.getElementById('winner-name').innerText = winner.nombre;
+                document.getElementById('winner-overlay').style.display = 'flex';
+
+                // Avisar a todos los móviles
+                db.ref(`salas/${roomId}/winner`).set(winner.id);
+            }
+        }
+
         // ==========================================
-        // MODO CLIENTE (MANDO)
+        // LÓGICA CLIENTE (MÓVIL)
         // ==========================================
         function initClientMode() {
-            const roomCode = document.getElementById('room-input').value;
-            const name = document.getElementById('name-input').value || "Jugador";
-            
-            if (roomCode.length !== 6) return alert("Código de sala inválido");
+            roomId = document.getElementById('room-input').value;
+            const name = document.getElementById('name-input').value || "Soldado";
+            if (roomId.length !== 6) return alert("Código incorrecto");
 
-            roomId = roomCode;
             playerId = 'p_' + Math.random().toString(36).substr(2, 9);
-            
-            const playerColor = `hsl(${Math.random() * 360}, 70%, 50%)`;
+            const color = `hsl(${Math.random() * 360}, 70%, 50%)`;
 
-            // Unirse a Firebase
             const playerRef = db.ref(`salas/${roomId}/jugadores/${playerId}`);
             
             playerRef.set({
                 nombre: name,
-                color: playerColor,
+                color: color,
                 input: { x: 0, y: 0, shoot: false },
-                lives: 3
+                status: 'alive'
             }).then(() => {
                 showScreen('ctrl');
-                document.getElementById('ctrl-player-name').innerText = name;
-                document.getElementById('ctrl-player-name').style.color = playerColor;
-                setupControllerLogic(playerRef);
-            }).catch(e => alert("Error conectando: " + e.message));
+                document.getElementById('ctrl-name').innerText = name;
+                document.getElementById('ctrl-name').style.color = color;
+                setupController(playerRef);
+            });
 
-            // Manejar desconexión
             playerRef.onDisconnect().remove();
 
-            // Escuchar mis propias vidas (para actualizar UI del móvil)
-            playerRef.child('lives').on('value', snap => {
-                const lives = snap.val();
-                document.getElementById('ctrl-lives').innerText = "❤".repeat(lives || 0);
-                if (lives <= 0) alert("¡Has muerto! Respawning...");
+            // Escuchar si me muero
+            db.ref(`salas/${roomId}/jugadores/${playerId}/status`).on('value', snap => {
+                if (snap.val() === 'dead') {
+                    document.getElementById('dead-screen').style.display = 'flex';
+                    // Desactivar controles
+                    document.querySelector('.control-panel').style.pointerEvents = 'none';
+                }
+            });
+
+            // Escuchar mis vidas para UI
+            db.ref(`salas/${roomId}/jugadores/${playerId}/livesUI`).on('value', snap => {
+                const lives = snap.val() || 0;
+                let hearts = "";
+                for(let i=0; i<lives; i++) hearts += "❤️";
+                document.getElementById('ctrl-hp').innerText = hearts;
+            });
+
+            // Escuchar Ganador Global
+            db.ref(`salas/${roomId}/winner`).on('value', snap => {
+                if (snap.val()) {
+                    if (snap.val() === playerId) {
+                        document.getElementById('mobile-win-screen').style.display = 'flex';
+                    } else {
+                        // Si ganó otro y yo no estaba muerto (caso raro) o ya vi mi pantalla de muerte
+                        // Podemos mostrar quién ganó en pequeño o dejar la pantalla de muerte
+                    }
+                }
             });
         }
 
-        function setupControllerLogic(playerRef) {
+        function setupController(ref) {
+            // (Misma lógica de joystick del ejemplo anterior)
             const stick = document.getElementById('joystick-stick');
             const zone = document.getElementById('joystick-zone');
-            const btnShoot = document.getElementById('btn-shoot');
-            
-            let dragStart = null;
-            let currentPos = { x: 0, y: 0 };
-            
-            // Función para enviar input (Throttle básico para no saturar)
-            let lastUpdate = 0;
-            function sendInput(shootOverride = false) {
-                const now = Date.now();
-                if (now - lastUpdate > 50 || shootOverride) { // Max 20 actualizaciones por segundo
-                    // Normalizar vector (-1 a 1)
-                    const maxDist = 50; // radio del joystick visual
-                    const inputX = currentPos.x / maxDist;
-                    const inputY = currentPos.y / maxDist;
-                    
-                    playerRef.update({
-                        input: { 
-                            x: parseFloat(inputX.toFixed(2)), 
-                            y: parseFloat(inputY.toFixed(2)),
-                            shoot: shootOverride
-                        }
-                    });
-                    lastUpdate = now;
-                }
-            }
+            let drag = false;
 
-            // Joystick Touch Logic
-            zone.addEventListener('touchstart', e => {
-                dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                stick.style.transition = 'none';
-            });
+            const send = (x, y, s) => ref.update({ input: { x:x, y:y, shoot:s } });
 
+            zone.addEventListener('touchstart', e => { drag = true; stick.style.transition='none'; });
             zone.addEventListener('touchmove', e => {
-                if (!dragStart) return;
-                const touch = e.touches[0];
-                let dx = touch.clientX - dragStart.x;
-                let dy = touch.clientY - dragStart.y;
+                if(!drag) return;
+                const t = e.touches[0];
+                const rect = zone.getBoundingClientRect();
+                const cx = rect.left + rect.width/2;
+                const cy = rect.top + rect.height/2;
                 
-                // Limitar distancia
-                const distance = Math.sqrt(dx*dx + dy*dy);
-                const maxDist = 50;
-                if (distance > maxDist) {
-                    dx = (dx / distance) * maxDist;
-                    dy = (dy / distance) * maxDist;
-                }
+                let dx = t.clientX - cx;
+                let dy = t.clientY - cy;
+                const dist = Math.sqrt(dx*dx+dy*dy);
+                const max = 40;
                 
-                currentPos = { x: dx, y: dy };
+                if(dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
+                
                 stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-                sendInput();
+                send(parseFloat((dx/max).toFixed(2)), parseFloat((dy/max).toFixed(2)), false);
             });
-
-            const endDrag = () => {
-                dragStart = null;
-                currentPos = { x: 0, y: 0 };
-                stick.style.transition = '0.2s';
-                stick.style.transform = `translate(-50%, -50%)`;
-                sendInput();
-            };
-
-            zone.addEventListener('touchend', endDrag);
-            zone.addEventListener('touchcancel', endDrag);
-
-            // Botón Disparo
-            btnShoot.addEventListener('touchstart', (e) => {
+            const end = () => { drag=false; stick.style.transition='0.2s'; stick.style.transform='translate(-50%,-50%)'; send(0,0,false); };
+            zone.addEventListener('touchend', end);
+            
+            document.getElementById('btn-shoot').addEventListener('touchstart', e => {
                 e.preventDefault();
-                sendInput(true); // Enviar shoot=true
-                setTimeout(() => sendInput(false), 100); // Reset rápido
+                send(0,0,true);
+                setTimeout(()=>send(0,0,false), 100);
             });
         }
 
         // ==========================================
-        // MOTOR DE JUEGO (CANVAS - SOLO HOST)
+        // MOTOR DE JUEGO (CANVAS)
         // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
+
         function initGameCanvas() {
             canvas.width = window.innerWidth * 0.9;
             canvas.height = window.innerHeight * 0.8;
         }
 
         function gameLoop() {
-            // Limpiar
+            if (!gameActive) return; // Detener render si hay ganador
+
             ctx.fillStyle = "#333";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Actualizar y Dibujar Jugadores
+            // 1. Jugadores
             Object.values(players).forEach(p => {
-                if (p.lives <= 0) return; // Si está muerto espera respawn
+                if (p.isDead) return;
 
-                // Movimiento basado en input remoto
-                const speed = 4;
+                // Movimiento
                 if (Math.abs(p.input.x) > 0.1 || Math.abs(p.input.y) > 0.1) {
-                    p.x += p.input.x * speed;
-                    p.y += p.input.y * speed;
+                    p.x += p.input.x * CONFIG.SPEED;
+                    p.y += p.input.y * CONFIG.SPEED;
                     p.angle = Math.atan2(p.input.y, p.input.x);
                 }
-
-                // Límites de pantalla
+                // Bordes
                 p.x = Math.max(20, Math.min(canvas.width - 20, p.x));
                 p.y = Math.max(20, Math.min(canvas.height - 20, p.y));
 
                 // Disparo
                 if (p.input.shoot && (!p.lastShot || Date.now() - p.lastShot > 500)) {
-                    bullets.push({
-                        x: p.x,
-                        y: p.y,
-                        vx: Math.cos(p.angle) * 8,
-                        vy: Math.sin(p.angle) * 8,
-                        owner: p.id,
-                        color: p.color
-                    });
+                    bullets.push({ x: p.x, y: p.y, vx: Math.cos(p.angle)*CONFIG.BULLET_SPEED, vy: Math.sin(p.angle)*CONFIG.BULLET_SPEED, owner: p.id, color: p.color });
                     p.lastShot = Date.now();
                 }
 
-                // Dibujar Tanque
                 drawTank(p);
             });
 
-            // 2. Actualizar y Dibujar Balas
+            // 2. Balas
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
-                b.x += b.vx;
-                b.y += b.vy;
+                b.x += b.vx; b.y += b.vy;
 
-                // Dibujar bala
                 ctx.fillStyle = b.color;
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
 
-                // Fuera de pantalla
                 if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
-                    bullets.splice(i, 1);
-                    continue;
+                    bullets.splice(i, 1); continue;
                 }
 
-                // Colisiones
+                // Colisión
                 Object.values(players).forEach(p => {
-                    if (p.id !== b.owner && p.lives > 0) {
-                        const dx = p.x - b.x;
-                        const dy = p.y - b.y;
-                        if (Math.sqrt(dx*dx + dy*dy) < 25) { // Radio de colisión
-                            // Impacto!
+                    if (p.id !== b.owner && !p.isDead) {
+                        const dist = Math.sqrt((p.x-b.x)**2 + (p.y-b.y)**2);
+                        if (dist < 25) {
                             bullets.splice(i, 1);
-                            handleHit(p.id);
+                            handleHit(p);
                         }
                     }
                 });
             }
-
             requestAnimationFrame(gameLoop);
         }
 
@@ -419,63 +410,58 @@
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.rotate(p.angle);
-            
-            // Cuerpo
             ctx.fillStyle = p.color;
-            ctx.fillRect(-20, -15, 40, 30);
-            
-            // Cañón
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(0, -5, 30, 10);
-            
-            // Orugas
-            ctx.fillStyle = "#000";
-            ctx.fillRect(-20, -20, 40, 5);
-            ctx.fillRect(-20, 15, 40, 5);
-
+            ctx.fillRect(-20, -15, 40, 30); // Cuerpo
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, -5, 30, 10); // Cañón
+            ctx.fillStyle = "#000"; ctx.fillRect(-20, -20, 40, 5); ctx.fillRect(-20, 15, 40, 5); // Orugas
             ctx.restore();
 
-            // Nombre y Vidas
-            ctx.fillStyle = "white";
-            ctx.font = "12px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(p.nombre, p.x, p.y - 30);
+            // Barra de HP (Golpes restantes en esta vida)
+            ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(p.nombre, p.x, p.y - 40);
             
-            // Barra de vida
-            ctx.fillStyle = "red";
-            ctx.fillRect(p.x - 15, p.y - 25, 30, 4);
-            ctx.fillStyle = "#0f0";
-            ctx.fillRect(p.x - 15, p.y - 25, 30 * (p.lives / 3), 4);
+            // Dibujar Corazones (Vidas)
+            let hearts = "";
+            for(let i=0; i<p.lives; i++) hearts += "❤️";
+            ctx.fillText(hearts, p.x, p.y - 55);
+
+            // Barra Verde (Salud actual de la vida)
+            const hpWidth = 40 * (p.currentHp / CONFIG.HITS_PER_LIFE);
+            ctx.fillStyle = "red"; ctx.fillRect(p.x - 20, p.y - 35, 40, 5);
+            ctx.fillStyle = "#0f0"; ctx.fillRect(p.x - 20, p.y - 35, hpWidth, 5);
         }
 
-        function handleHit(targetId) {
-            if (!players[targetId]) return;
-            
-            players[targetId].lives--;
-            
-            // Actualizar vidas en Firebase (para que el móvil sepa)
-            db.ref(`salas/${roomId}/jugadores/${targetId}/lives`).set(players[targetId].lives);
+        function handleHit(p) {
+            // Lógica de daño
+            p.currentHp--; 
 
-            if (players[targetId].lives <= 0) {
-                // Respawn simple
-                setTimeout(() => {
-                    if(players[targetId]) {
-                        players[targetId].lives = 3;
-                        players[targetId].x = Math.random() * canvas.width;
-                        players[targetId].y = Math.random() * canvas.height;
-                        db.ref(`salas/${roomId}/jugadores/${targetId}/lives`).set(3);
-                        updateScoreboard();
-                    }
-                }, 3000);
+            // Si se acaban los HP de esta vida
+            if (p.currentHp <= 0) {
+                p.lives--; // Pierde una vida
+                
+                // Actualizar móvil
+                db.ref(`salas/${roomId}/jugadores/${p.id}/livesUI`).set(p.lives);
+
+                if (p.lives > 0) {
+                    // Aun le quedan vidas -> Respawn
+                    p.currentHp = CONFIG.HITS_PER_LIFE; // Reset HP
+                    p.x = Math.random() * canvas.width;
+                    p.y = Math.random() * canvas.height;
+                } else {
+                    // Muerte Definitiva
+                    p.isDead = true;
+                    db.ref(`salas/${roomId}/jugadores/${p.id}/status`).set('dead');
+                    checkWinner(); // Verificar si alguien ganó
+                }
             }
             updateScoreboard();
         }
 
         function updateScoreboard() {
             const board = document.getElementById('score-board');
-            let html = "<h3>Marcador</h3>";
+            let html = "";
             Object.values(players).forEach(p => {
-                html += `<div style="color:${p.color}">${p.nombre}: ${p.lives} ❤</div>`;
+                const style = p.isDead ? "text-decoration:line-through; color:#555" : `color:${p.color}`;
+                html += `<div style="${style}">${p.nombre}: ${p.lives} vidas</div>`;
             });
             board.innerHTML = html;
             document.getElementById('player-count').innerText = Object.keys(players).length;
