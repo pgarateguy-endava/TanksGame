@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tanques Battle Royale v3</title>
+    <title>Tanques Battle Royale v4 (Escudos)</title>
     
     <!-- Librerías Externas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-app.js"></script>
@@ -30,7 +30,7 @@
         #game-screen { background: #111; position: relative; }
         canvas { background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
         
-        /* Lobby Overlay (Antes de iniciar) */
+        /* Lobby Overlay */
         #lobby-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; backdrop-filter: blur(5px); transition: opacity 0.5s; }
         .lobby-content { text-align: center; background: rgba(255,255,255,0.1); padding: 40px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); }
         #qrcode { margin: 20px auto; background: white; padding: 10px; display: inline-block; border-radius: 5px; }
@@ -38,9 +38,9 @@
         .player-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; max-width: 600px; }
         .player-chip { background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 15px; font-size: 0.9rem; }
 
-        /* HUD IN-GAME (HOST) */
+        /* HUD IN-GAME */
         #game-hud { position: absolute; top: 10px; left: 10px; pointer-events: none; z-index: 5; }
-        .hud-panel { background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; margin-bottom: 5px; }
+        .hud-panel { background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; margin-bottom: 5px; font-weight: bold; }
 
         /* PANTALLA GANADOR */
         #winner-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
@@ -55,12 +55,11 @@
         #btn-shoot { width: 100px; height: 100px; background: #ff4444; border-radius: 50%; border: 4px solid #cc0000; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
         #btn-shoot:active { background: #cc0000; transform: scale(0.95); }
 
-        /* ESTADO MÓVIL */
         .mobile-top-bar { position: absolute; top: 0; width: 100%; padding: 15px; display: flex; justify-content: space-between; background: rgba(0,0,0,0.8); font-weight: bold; border-bottom: 1px solid #444; }
         
         /* OVERLAYS MÓVIL */
         .overlay-msg { display: none; width: 100%; height: 100%; flex-direction: column; justify-content: center; align-items: center; position: absolute; top:0; left:0; z-index: 50; text-align: center; padding: 20px; }
-        #waiting-screen { background: #002233; display: flex; } /* Visible por defecto al entrar */
+        #waiting-screen { background: #002233; display: flex; }
         #dead-screen { background: #220000; color: #ff5555; }
         #win-screen { background: #003300; color: #00ff00; }
     </style>
@@ -69,7 +68,7 @@
 
     <!-- MENÚ PRINCIPAL -->
     <div id="menu-screen" class="screen active">
-        <h1>TANK BATTLE</h1>
+        <h1>TANK BATTLE v4</h1>
         <button class="btn" onclick="initHostMode()">📺 Crear Sala (Host)</button>
         <div style="border-top: 1px solid #444; margin: 30px auto; padding: 20px; max-width: 400px;">
             <input type="text" id="room-input" placeholder="Código de Sala" maxlength="6">
@@ -82,29 +81,25 @@
     <!-- PANTALLA DE JUEGO (HOST) -->
     <div id="game-screen" class="screen">
         <canvas id="gameCanvas"></canvas>
-        
-        <!-- HUD durante el juego -->
         <div id="game-hud">
             <div class="hud-panel">SALA: <span id="hud-room-code"></span></div>
         </div>
-
-        <!-- LOBBY DE ESPERA (Se oculta al iniciar) -->
+        
+        <!-- LOBBY -->
         <div id="lobby-overlay">
             <div class="lobby-content">
                 <h2>ÚNASE PARA JUGAR</h2>
                 <div class="room-code" id="display-room-code">------</div>
                 <div id="qrcode"></div>
                 <p>Escanea o ingresa el código</p>
-                <div class="player-grid" id="lobby-list">
-                    <!-- Jugadores aparecerán aquí -->
-                </div>
+                <div class="player-grid" id="lobby-list"></div>
                 <br>
                 <h3 id="player-count-display">0 Jugadores listos</h3>
                 <button id="btn-start-game" class="btn" onclick="startGame()" disabled>ESPERANDO JUGADORES...</button>
             </div>
         </div>
 
-        <!-- Overlay de Ganador -->
+        <!-- GANADOR -->
         <div id="winner-overlay">
             <h2 style="color:white">¡VICTORIA!</h2>
             <div id="winner-name">JUGADOR</div>
@@ -112,47 +107,31 @@
         </div>
     </div>
 
-    <!-- PANTALLA DE MANDO (CLIENTE) -->
+    <!-- PANTALLA CLIENTE -->
     <div id="controller-screen" class="screen">
-        
-        <!-- 1. Esperando al Host -->
         <div id="waiting-screen" class="overlay-msg">
-            <h1>ESPERANDO</h1>
-            <p>El anfitrión iniciará la partida pronto...</p>
-            <div class="spinner" style="font-size:2rem; margin-top:20px;">⏳</div>
+            <h1>ESPERANDO</h1><p>El anfitrión iniciará pronto...</p>
+            <div style="font-size:2rem; margin-top:20px;">⏳</div>
         </div>
-
-        <!-- 2. Pantalla Muerte -->
         <div id="dead-screen" class="overlay-msg">
-            <h1>ELIMINADO</h1>
-            <p>Suerte para la próxima</p>
+            <h1>ELIMINADO</h1><p>Buena batalla</p>
         </div>
-
-        <!-- 3. Pantalla Victoria -->
         <div id="win-screen" class="overlay-msg">
-            <h1>¡CAMPEÓN!</h1>
-            <p>Has dominado el campo de batalla</p>
+            <h1>¡CAMPEÓN!</h1><p>Eres indestructible</p>
         </div>
-
-        <!-- Controles (Solo visibles cuando status = playing) -->
         <div class="mobile-top-bar">
             <span id="ctrl-name">Jugador</span>
-            <span>HP: <span id="ctrl-hp">❤️❤️❤️</span></span>
+            <span><span id="ctrl-hp">❤️❤️❤️❤️</span></span>
         </div>
-
         <div class="control-panel">
-            <div id="joystick-zone">
-                <div id="joystick-stick"></div>
-            </div>
-            <div id="shoot-zone">
-                <div id="btn-shoot">🔥</div>
-            </div>
+            <div id="joystick-zone"><div id="joystick-stick"></div></div>
+            <div id="shoot-zone"><div id="btn-shoot">🔥</div></div>
         </div>
     </div>
 
     <script>
         // ==========================================
-        // 1. CONFIGURACIÓN FIREBASE (PON TUS DATOS)
+        // CONFIGURACIÓN FIREBASE (PONER TUS DATOS)
         // ==========================================
         const firebaseConfig = {
               apiKey: "AIzaSyBb4BGWFS5a2RA1jfyW-z1m-Ai9sMgx3yk",
@@ -164,17 +143,18 @@
                 appId: "1:416121252286:web:bc4ed5cd9b5fdd58e771ef",
                 measurementId: "G-7FB4L3C5ZW"
         };
-
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
         // ==========================================
-        // 2. CONFIGURACIÓN DEL JUEGO
+        // CONFIGURACIÓN DEL JUEGO
         // ==========================================
         const CONFIG = {
-            MAX_LIVES: 3,        // Vidas totales (Respawns)
-            HP_PER_LIFE: 3,      // Golpes que aguanta cada vida
-            POWERUP_INTERVAL: 30000, // 30 segundos
+            MAX_LIVES: 4,          // 4 Vidas
+            HP_PER_LIFE: 3,        // 3 Golpes por vida
+            HEALTH_INTERVAL: 30000, // 30 segundos (Vida)
+            SHIELD_INTERVAL: 60000, // 60 segundos (Escudo)
+            SHIELD_DURATION: 5000,  // 5 segundos de invencibilidad
             SPEED: 4,
             BULLET_SPEED: 9
         };
@@ -183,17 +163,16 @@
         let roomId = null;
         let playerId = null;
         let isHost = false;
-        let gameStatus = 'lobby'; // lobby, playing, ended
+        let gameStatus = 'lobby'; 
         
         // Variables Host
         const players = {}; 
         const bullets = [];
-        const powerups = []; // Array para items
-        let powerupTimer = null;
+        const gameItems = []; // Array unificado para items (salud y escudo)
+        let timers = []; // Para limpiar intervalos
         
-        // Cargar Imagen de Fondo
         const bgImage = new Image();
-        bgImage.src = 'background.png'; // Debe estar en la misma carpeta
+        bgImage.src = 'background.png';
 
         // Referencias DOM
         const screens = {
@@ -202,7 +181,6 @@
             ctrl: document.getElementById('controller-screen')
         };
 
-        // Autocompletar URL
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('sala')) document.getElementById('room-input').value = urlParams.get('sala');
 
@@ -213,7 +191,7 @@
         }
 
         // ==========================================
-        // 3. LÓGICA HOST (PANTALLA PRINCIPAL)
+        // LÓGICA HOST
         // ==========================================
         function initHostMode() {
             isHost = true;
@@ -236,7 +214,6 @@
             const roomRef = db.ref(`salas/${roomId}`);
             roomRef.set({ status: "lobby", created: Date.now() });
 
-            // Jugador entra
             roomRef.child('jugadores').on('child_added', (snapshot) => {
                 const pInfo = snapshot.val();
                 players[snapshot.key] = {
@@ -249,27 +226,23 @@
                     lives: CONFIG.MAX_LIVES,
                     currentHp: CONFIG.HP_PER_LIFE,
                     input: { x: 0, y: 0, shoot: false },
-                    isDead: false
+                    isDead: false,
+                    shieldExpires: 0 // Nuevo: Timestamp fin de escudo
                 };
                 updateLobbyUI();
             });
 
-            // Input movimiento
             roomRef.child('jugadores').on('child_changed', (snap) => {
                 const id = snap.key;
-                if (players[id] && snap.val().input) {
-                    players[id].input = snap.val().input;
-                }
+                if (players[id] && snap.val().input) players[id].input = snap.val().input;
             });
 
-            // Jugador sale
             roomRef.child('jugadores').on('child_removed', (snap) => {
                 delete players[snap.key];
                 updateLobbyUI();
                 if(gameStatus === 'playing') checkWinner();
             });
 
-            // Iniciar ciclo de renderizado (para mostrar fondo aunque esté en lobby)
             requestAnimationFrame(gameLoop);
         }
 
@@ -279,44 +252,36 @@
             const btn = document.getElementById('btn-start-game');
             
             document.getElementById('player-count-display').innerText = `${count} Jugadores listos`;
-            
             list.innerHTML = Object.values(players)
                 .map(p => `<div class="player-chip" style="border:2px solid ${p.color}">${p.nombre}</div>`)
                 .join('');
 
             if (count >= 2) {
-                btn.disabled = false;
-                btn.innerText = "INICIAR PARTIDA";
-                btn.style.background = "#4CAF50";
+                btn.disabled = false; btn.innerText = "INICIAR PARTIDA"; btn.style.background = "#4CAF50";
             } else {
-                btn.disabled = true;
-                btn.innerText = "ESPERANDO MÁS JUGADORES...";
-                btn.style.background = "#555";
+                btn.disabled = true; btn.innerText = "ESPERANDO MÁS JUGADORES..."; btn.style.background = "#555";
             }
         }
 
         function startGame() {
             gameStatus = 'playing';
-            
-            // Ocultar Lobby UI
             document.getElementById('lobby-overlay').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('lobby-overlay').style.display = 'none';
-            }, 500);
-
-            // Avisar a Firebase
+            setTimeout(() => { document.getElementById('lobby-overlay').style.display = 'none'; }, 500);
             db.ref(`salas/${roomId}`).update({ status: 'playing' });
 
-            // Iniciar Spawner de Powerups (Cada 30 seg)
-            powerupTimer = setInterval(spawnPowerup, CONFIG.POWERUP_INTERVAL);
+            // Iniciar Spawners
+            // 1. Salud (30 seg)
+            timers.push(setInterval(() => spawnItem('health'), CONFIG.HEALTH_INTERVAL));
+            // 2. Escudo (60 seg)
+            timers.push(setInterval(() => spawnItem('shield'), CONFIG.SHIELD_INTERVAL));
         }
 
-        function spawnPowerup() {
+        function spawnItem(type) {
             if (gameStatus !== 'playing') return;
-            // Solo max 3 powerups en pantalla para no saturar
-            if (powerups.length >= 3) return;
+            if (gameItems.length >= 5) return; // Limite items en pantalla
 
-            powerups.push({
+            gameItems.push({
+                type: type, // 'health' or 'shield'
                 x: Math.random() * (canvas.width - 60) + 30,
                 y: Math.random() * (canvas.height - 60) + 30,
                 radius: 15,
@@ -326,26 +291,22 @@
 
         function checkWinner() {
             const activePlayers = Object.values(players).filter(p => !p.isDead);
-            // Si queda 1 vivo y empezó con más de 1
             if (activePlayers.length === 1 && Object.keys(players).length > 1) {
                 gameStatus = 'ended';
                 const winner = activePlayers[0];
-                
                 document.getElementById('winner-name').innerText = winner.nombre;
                 document.getElementById('winner-overlay').style.display = 'flex';
-                
                 db.ref(`salas/${roomId}/winner`).set(winner.id);
-                clearInterval(powerupTimer);
+                timers.forEach(t => clearInterval(t)); // Detener spawns
             }
         }
 
         // ==========================================
-        // 4. LÓGICA CLIENTE (MÓVIL)
+        // LÓGICA CLIENTE
         // ==========================================
         function initClientMode() {
             const code = document.getElementById('room-input').value;
             const name = document.getElementById('name-input').value || "Tanque";
-            
             if (code.length < 5) return alert("Código inválido");
             roomId = code;
             
@@ -353,10 +314,8 @@
             const color = `hsl(${Math.random() * 360}, 75%, 50%)`;
 
             const playerRef = db.ref(`salas/${roomId}/jugadores/${playerId}`);
-            
             playerRef.set({
-                nombre: name,
-                color: color,
+                nombre: name, color: color,
                 input: { x: 0, y: 0, shoot: false },
                 livesUI: CONFIG.MAX_LIVES
             }).then(() => {
@@ -368,41 +327,25 @@
 
             playerRef.onDisconnect().remove();
 
-            // Escuchar ESTADO DE LA SALA
             db.ref(`salas/${roomId}/status`).on('value', snap => {
                 const status = snap.val();
-                const waitScreen = document.getElementById('waiting-screen');
-                
-                if (status === 'playing') {
-                    waitScreen.style.display = 'none'; // A jugar!
-                } else if (status === 'lobby') {
-                    waitScreen.style.display = 'flex'; // Esperando host
-                }
+                const wait = document.getElementById('waiting-screen');
+                if (status === 'playing') wait.style.display = 'none';
+                else if (status === 'lobby') wait.style.display = 'flex';
             });
 
-            // Escuchar mis vidas y muerte
             db.ref(`salas/${roomId}/jugadores/${playerId}`).on('value', snap => {
                 const data = snap.val();
                 if (!data) return;
-
-                // Actualizar corazones
-                const lives = data.livesUI; // Vidas
-                const hp = data.hpUI || CONFIG.HP_PER_LIFE; // Salud actual (opcional visualizar)
-                
-                // Mostrar solo las Vidas (Respawns) como corazones grandes
-                document.getElementById('ctrl-hp').innerText = "❤️".repeat(lives);
-
+                document.getElementById('ctrl-hp').innerText = "❤️".repeat(data.livesUI);
                 if (data.status === 'dead') {
                     document.getElementById('dead-screen').style.display = 'flex';
                     document.querySelector('.control-panel').style.pointerEvents = 'none';
                 }
             });
 
-            // Escuchar Ganador
             db.ref(`salas/${roomId}/winner`).on('value', snap => {
-                if (snap.val() === playerId) {
-                    document.getElementById('win-screen').style.display = 'flex';
-                }
+                if (snap.val() === playerId) document.getElementById('win-screen').style.display = 'flex';
             });
         }
 
@@ -421,11 +364,10 @@
                 const dy = t.clientY - (rect.top + rect.height/2);
                 const dist = Math.sqrt(dx*dx+dy*dy);
                 const max = 40;
-                const limitX = dist > max ? (dx/dist)*max : dx;
-                const limitY = dist > max ? (dy/dist)*max : dy;
-                
-                stick.style.transform = `translate(calc(-50% + ${limitX}px), calc(-50% + ${limitY}px))`;
-                send(parseFloat((limitX/max).toFixed(2)), parseFloat((limitY/max).toFixed(2)), false);
+                const lx = dist > max ? (dx/dist)*max : dx;
+                const ly = dist > max ? (dy/dist)*max : dy;
+                stick.style.transform = `translate(calc(-50% + ${lx}px), calc(-50% + ${ly}px))`;
+                send(parseFloat((lx/max).toFixed(2)), parseFloat((ly/max).toFixed(2)), false);
             });
             const end = () => { drag=false; stick.style.transition='0.2s'; stick.style.transform='translate(-50%,-50%)'; send(0,0,false); };
             zone.addEventListener('touchend', end);
@@ -436,7 +378,7 @@
         }
 
         // ==========================================
-        // 5. MOTOR DE JUEGO (CANVAS HOST)
+        // MOTOR DE JUEGO
         // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -447,52 +389,35 @@
         }
 
         function gameLoop() {
-            // Limpiar y Dibujar FONDO
             ctx.fillStyle = "#111";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Dibujar imagen background.png (si cargó, llenar pantalla)
-            if (bgImage.complete) {
-                // drawImage(img, x, y, width, height) - Estirado para llenar
-                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
-                
-                // Opcional: Si quieres mantener ratio y repetir (tile):
-                // const ptrn = ctx.createPattern(bgImage, 'repeat');
-                // ctx.fillStyle = ptrn; ctx.fillRect(0,0,canvas.width,canvas.height);
-            }
+            if (bgImage.complete) ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
 
-            // Si estamos en Lobby, solo dibujamos fondo y salimos
-            if (gameStatus !== 'playing') {
-                requestAnimationFrame(gameLoop);
-                return;
-            }
+            if (gameStatus !== 'playing') { requestAnimationFrame(gameLoop); return; }
 
-            // --- LÓGICA DE JUEGO ---
-
-            // 1. Dibujar Powerups
-            powerups.forEach((pu, index) => {
-                pu.pulse += 0.1;
-                const scale = 1 + Math.sin(pu.pulse) * 0.2;
+            // 1. Dibujar Items
+            for (let i = gameItems.length - 1; i >= 0; i--) {
+                const item = gameItems[i];
+                item.pulse += 0.1;
+                const scale = 1 + Math.sin(item.pulse) * 0.1;
                 
                 ctx.save();
-                ctx.translate(pu.x, pu.y);
+                ctx.translate(item.x, item.y);
                 ctx.scale(scale, scale);
                 
-                // Dibujar cruz verde (Salud)
-                ctx.fillStyle = "#00ff00";
                 ctx.shadowBlur = 15;
-                ctx.shadowColor = "#00ff00";
-                ctx.beginPath();
-                ctx.arc(0, 0, 10, 0, Math.PI*2);
-                ctx.fill();
-                ctx.fillStyle = "white";
-                ctx.font = "bold 14px Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("+", 0, 1);
-                
+                if (item.type === 'health') {
+                    ctx.fillStyle = "#00ff00"; ctx.shadowColor = "#00ff00";
+                    ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = "white"; ctx.font = "bold 14px Arial"; 
+                    ctx.textAlign = "center"; ctx.textBaseline="middle"; ctx.fillText("+", 0, 1);
+                } else if (item.type === 'shield') {
+                    ctx.fillStyle = "#00ffff"; ctx.shadowColor = "#00ffff";
+                    ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
+                }
                 ctx.restore();
-            });
+            }
 
             // 2. Jugadores
             Object.values(players).forEach(p => {
@@ -504,18 +429,19 @@
                     p.y += p.input.y * CONFIG.SPEED;
                     p.angle = Math.atan2(p.input.y, p.input.x);
                 }
-                // Limites
                 p.x = Math.max(30, Math.min(canvas.width - 30, p.x));
                 p.y = Math.max(30, Math.min(canvas.height - 30, p.y));
 
-                // Colisión con Powerups
-                for (let i = powerups.length - 1; i >= 0; i--) {
-                    const pu = powerups[i];
-                    const dist = Math.hypot(p.x - pu.x, p.y - pu.y);
-                    if (dist < 35) { // Radio captura
-                        // EFECTO: Llenar HP de la vida actual
-                        p.currentHp = CONFIG.HP_PER_LIFE; 
-                        powerups.splice(i, 1); // Consumir
+                // Colisión Items
+                for (let i = gameItems.length - 1; i >= 0; i--) {
+                    const item = gameItems[i];
+                    if (Math.hypot(p.x - item.x, p.y - item.y) < 35) {
+                        if (item.type === 'health') {
+                            p.currentHp = CONFIG.HP_PER_LIFE; // Curar
+                        } else if (item.type === 'shield') {
+                            p.shieldExpires = Date.now() + CONFIG.SHIELD_DURATION; // Activar Escudo
+                        }
+                        gameItems.splice(i, 1);
                     }
                 }
 
@@ -547,7 +473,6 @@
                     bullets.splice(i, 1); continue;
                 }
 
-                // Colisión Bala vs Jugador
                 Object.values(players).forEach(p => {
                     if (p.id !== b.owner && !p.isDead) {
                         if (Math.hypot(p.x - b.x, p.y - b.y) < 25) {
@@ -557,7 +482,6 @@
                     }
                 });
             }
-
             requestAnimationFrame(gameLoop);
         }
 
@@ -566,27 +490,38 @@
             ctx.translate(p.x, p.y);
             ctx.rotate(p.angle);
             
-            // Sombra para dar profundidad sobre el background
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 10;
+            // SOMBRA
+            ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
             
-            ctx.fillStyle = p.color;
+            // COLOR DEL TANQUE (CAMBIA SI TIENE ESCUDO)
+            const isShielded = p.shieldExpires > Date.now();
+            ctx.fillStyle = isShielded ? "#FFD700" : p.color; // Dorado o Color Normal
+
+            // CUERPO
             ctx.fillRect(-20, -15, 40, 30);
-            ctx.fillStyle = "#fff"; ctx.fillRect(0, -5, 30, 10);
+            ctx.fillStyle = isShielded ? "#FFFACD" : "#fff"; ctx.fillRect(0, -5, 30, 10);
             ctx.fillStyle = "#111"; ctx.fillRect(-20, -20, 40, 5); ctx.fillRect(-20, 15, 40, 5);
+            
+            // EFECTO VISUAL DE ESCUDO (CAMPO DE FUERZA)
+            if (isShielded) {
+                ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 + Math.sin(Date.now()/100)*0.3})`; // Parpadeo
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, 35, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            
             ctx.restore();
 
-            // UI Flotante
+            // HUD Flotante
             ctx.shadowBlur = 0;
             ctx.fillStyle = "white"; ctx.font = "bold 12px Arial"; ctx.textAlign = "center";
             ctx.fillText(p.nombre, p.x, p.y - 45);
             
-            // Vidas (Corazones grandes)
             let hearts = "❤️".repeat(p.lives);
             ctx.font = "14px Arial";
             ctx.fillText(hearts, p.x, p.y - 60);
 
-            // Barra Salud (HP de la vida actual)
             const hpPct = p.currentHp / CONFIG.HP_PER_LIFE;
             ctx.fillStyle = "red"; ctx.fillRect(p.x - 20, p.y - 35, 40, 6);
             ctx.fillStyle = "#0f0"; ctx.fillRect(p.x - 20, p.y - 35, 40 * hpPct, 6);
@@ -594,21 +529,22 @@
         }
 
         function handleHit(p) {
-            p.currentHp--;
-            
-            // Enviar actualización de vida parcial (opcional para el cliente)
-            // db.ref(`salas/${roomId}/jugadores/${p.id}/hpUI`).set(p.currentHp);
+            // Verificar Escudo
+            if (p.shieldExpires > Date.now()) {
+                // Sonido visual de rebote (opcional)
+                return; // NO HACE DAÑO
+            }
 
+            p.currentHp--;
             if (p.currentHp <= 0) {
-                p.lives--; // Pierde una vida (respawn)
-                
-                // Actualizar corazones en Cliente
+                p.lives--;
                 db.ref(`salas/${roomId}/jugadores/${p.id}/livesUI`).set(p.lives);
 
                 if (p.lives > 0) {
-                    p.currentHp = CONFIG.HP_PER_LIFE; // Resetea salud
+                    p.currentHp = CONFIG.HP_PER_LIFE;
                     p.x = Math.random() * (canvas.width-50)+25;
                     p.y = Math.random() * (canvas.height-50)+25;
+                    p.shieldExpires = 0; // Perder escudo al morir (si lo tuviera por bug)
                 } else {
                     p.isDead = true;
                     db.ref(`salas/${roomId}/jugadores/${p.id}/status`).set('dead');
@@ -616,7 +552,6 @@
                 }
             }
         }
-
     </script>
 </body>
 </html>
