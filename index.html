@@ -150,11 +150,13 @@
         // CONFIGURACIÓN DEL JUEGO
         // ==========================================
         const CONFIG = {
-            MAX_LIVES: 4,          // 4 Vidas
-            HP_PER_LIFE: 3,        // 3 Golpes por vida
-            HEALTH_INTERVAL: 30000, // 30 segundos (Vida)
-            SHIELD_INTERVAL: 60000, // 60 segundos (Escudo)
-            SHIELD_DURATION: 5000,  // 5 segundos de invencibilidad
+            MAX_LIVES: 4,
+            HP_PER_LIFE: 3,
+            HEALTH_INTERVAL: 30000,
+            SHIELD_INTERVAL: 60000,
+            SHIELD_DURATION: 20000,      // ✅ 20 segundos
+            GIANT_INTERVAL: 45000,        // ✅ 45 segundos
+            RAPID_FIRE_INTERVAL: 60000,   // ✅ 60 segundos
             SPEED: 4,
             BULLET_SPEED: 9
         };
@@ -168,8 +170,8 @@
         // Variables Host
         const players = {}; 
         const bullets = [];
-        const gameItems = []; // Array unificado para items (salud y escudo)
-        let timers = []; // Para limpiar intervalos
+        const gameItems = [];
+        let timers = [];
         
         const bgImage = new Image();
         bgImage.src = 'background.png';
@@ -227,7 +229,9 @@
                     currentHp: CONFIG.HP_PER_LIFE,
                     input: { x: 0, y: 0, shoot: false },
                     isDead: false,
-                    shieldExpires: 0 // Nuevo: Timestamp fin de escudo
+                    shieldExpires: 0,
+                    isGiant: false,        // ✅ Nuevo poder
+                    hasRapidFire: false    // ✅ Nuevo poder
                 };
                 updateLobbyUI();
             });
@@ -269,19 +273,19 @@
             setTimeout(() => { document.getElementById('lobby-overlay').style.display = 'none'; }, 500);
             db.ref(`salas/${roomId}`).update({ status: 'playing' });
 
-            // Iniciar Spawners
-            // 1. Salud (30 seg)
+            // Spawners
             timers.push(setInterval(() => spawnItem('health'), CONFIG.HEALTH_INTERVAL));
-            // 2. Escudo (60 seg)
             timers.push(setInterval(() => spawnItem('shield'), CONFIG.SHIELD_INTERVAL));
+            timers.push(setInterval(() => spawnItem('giant'), CONFIG.GIANT_INTERVAL));        // ✅
+            timers.push(setInterval(() => spawnItem('rapidfire'), CONFIG.RAPID_FIRE_INTERVAL)); // ✅
         }
 
         function spawnItem(type) {
             if (gameStatus !== 'playing') return;
-            if (gameItems.length >= 5) return; // Limite items en pantalla
+            if (gameItems.length >= 5) return;
 
             gameItems.push({
-                type: type, // 'health' or 'shield'
+                type: type,
                 x: Math.random() * (canvas.width - 60) + 30,
                 y: Math.random() * (canvas.height - 60) + 30,
                 radius: 15,
@@ -297,7 +301,7 @@
                 document.getElementById('winner-name').innerText = winner.nombre;
                 document.getElementById('winner-overlay').style.display = 'flex';
                 db.ref(`salas/${roomId}/winner`).set(winner.id);
-                timers.forEach(t => clearInterval(t)); // Detener spawns
+                timers.forEach(t => clearInterval(t));
             }
         }
 
@@ -415,6 +419,16 @@
                     ctx.fillStyle = "#00ffff"; ctx.shadowColor = "#00ffff";
                     ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
                     ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
+                } else if (item.type === 'giant') { // ✅
+                    ctx.fillStyle = "#ff0000"; ctx.shadowColor = "#ff0000";
+                    ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = "white"; ctx.font = "bold 16px Arial";
+                    ctx.fillText("⬆", 0, 1);
+                } else if (item.type === 'rapidfire') { // ✅
+                    ctx.fillStyle = "#ff8800"; ctx.shadowColor = "#ff8800";
+                    ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = "white"; ctx.font = "bold 12px Arial";
+                    ctx.fillText("⚡", 0, 1);
                 }
                 ctx.restore();
             }
@@ -435,23 +449,31 @@
                 // Colisión Items
                 for (let i = gameItems.length - 1; i >= 0; i--) {
                     const item = gameItems[i];
-                    if (Math.hypot(p.x - item.x, p.y - item.y) < 35) {
+                    const hitRadius = p.isGiant ? 50 : 35; // ✅ Hitbox aumentado
+                    if (Math.hypot(p.x - item.x, p.y - item.y) < hitRadius) {
                         if (item.type === 'health') {
-                            p.currentHp = CONFIG.HP_PER_LIFE; // Curar
+                            p.currentHp = CONFIG.HP_PER_LIFE;
                         } else if (item.type === 'shield') {
-                            p.shieldExpires = Date.now() + CONFIG.SHIELD_DURATION; // Activar Escudo
+                            p.shieldExpires = Date.now() + CONFIG.SHIELD_DURATION;
+                        } else if (item.type === 'giant') { // ✅
+                            p.isGiant = true;
+                        } else if (item.type === 'rapidfire') { // ✅
+                            p.hasRapidFire = true;
                         }
                         gameItems.splice(i, 1);
                     }
                 }
 
                 // Disparo
-                if (p.input.shoot && (!p.lastShot || Date.now() - p.lastShot > 500)) {
+                const fireRate = p.hasRapidFire ? 250 : 500; // ✅
+                if (p.input.shoot && (!p.lastShot || Date.now() - p.lastShot > fireRate)) {
+                    const bulletSize = p.isGiant ? 12 : 6; // ✅
                     bullets.push({ 
                         x: p.x, y: p.y, 
                         vx: Math.cos(p.angle)*CONFIG.BULLET_SPEED, 
                         vy: Math.sin(p.angle)*CONFIG.BULLET_SPEED, 
-                        owner: p.id, color: p.color 
+                        owner: p.id, color: p.color,
+                        size: bulletSize // ✅
                     });
                     p.lastShot = Date.now();
                 }
@@ -466,7 +488,7 @@
 
                 ctx.fillStyle = b.color;
                 ctx.shadowBlur = 10; ctx.shadowColor = b.color;
-                ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI*2); ctx.fill(); // ✅
                 ctx.shadowBlur = 0;
 
                 if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
@@ -475,7 +497,8 @@
 
                 Object.values(players).forEach(p => {
                     if (p.id !== b.owner && !p.isDead) {
-                        if (Math.hypot(p.x - b.x, p.y - b.y) < 25) {
+                        const hitDist = p.isGiant ? 40 : 25; // ✅
+                        if (Math.hypot(p.x - b.x, p.y - b.y) < hitDist) {
                             bullets.splice(i, 1);
                             handleHit(p);
                         }
@@ -486,25 +509,33 @@
         }
 
         function drawTank(p) {
+            const scale = p.isGiant ? 2 : 1; // ✅
+            
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.rotate(p.angle);
+            ctx.scale(scale, scale); // ✅
             
             // SOMBRA
             ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
             
-            // COLOR DEL TANQUE (CAMBIA SI TIENE ESCUDO)
+            // COLOR DEL TANQUE
             const isShielded = p.shieldExpires > Date.now();
-            ctx.fillStyle = isShielded ? "#FFD700" : p.color; // Dorado o Color Normal
+            ctx.fillStyle = isShielded ? "#FFD700" : p.color;
 
             // CUERPO
             ctx.fillRect(-20, -15, 40, 30);
-            ctx.fillStyle = isShielded ? "#FFFACD" : "#fff"; ctx.fillRect(0, -5, 30, 10);
+            
+            // CAÑÓN (ancho x2 si tiene rapid fire) ✅
+            const cannonWidth = p.hasRapidFire ? 20 : 10;
+            ctx.fillStyle = isShielded ? "#FFFACD" : "#fff";
+            ctx.fillRect(0, -cannonWidth/2, 30, cannonWidth);
+            
             ctx.fillStyle = "#111"; ctx.fillRect(-20, -20, 40, 5); ctx.fillRect(-20, 15, 40, 5);
             
-            // EFECTO VISUAL DE ESCUDO (CAMPO DE FUERZA)
+            // ESCUDO
             if (isShielded) {
-                ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 + Math.sin(Date.now()/100)*0.3})`; // Parpadeo
+                ctx.strokeStyle = `rgba(255, 215, 0, ${0.5 + Math.sin(Date.now()/100)*0.3})`;
                 ctx.lineWidth = 3;
                 ctx.beginPath();
                 ctx.arc(0, 0, 35, 0, Math.PI*2);
@@ -516,24 +547,21 @@
             // HUD Flotante
             ctx.shadowBlur = 0;
             ctx.fillStyle = "white"; ctx.font = "bold 12px Arial"; ctx.textAlign = "center";
-            ctx.fillText(p.nombre, p.x, p.y - 45);
+            ctx.fillText(p.nombre, p.x, p.y - 45 * scale); // ✅
             
             let hearts = "❤️".repeat(p.lives);
             ctx.font = "14px Arial";
-            ctx.fillText(hearts, p.x, p.y - 60);
+            ctx.fillText(hearts, p.x, p.y - 60 * scale); // ✅
 
             const hpPct = p.currentHp / CONFIG.HP_PER_LIFE;
-            ctx.fillStyle = "red"; ctx.fillRect(p.x - 20, p.y - 35, 40, 6);
-            ctx.fillStyle = "#0f0"; ctx.fillRect(p.x - 20, p.y - 35, 40 * hpPct, 6);
-            ctx.strokeStyle = "black"; ctx.strokeRect(p.x - 20, p.y - 35, 40, 6);
+            const barWidth = 40 * scale; // ✅
+            ctx.fillStyle = "red"; ctx.fillRect(p.x - barWidth/2, p.y - 35 * scale, barWidth, 6);
+            ctx.fillStyle = "#0f0"; ctx.fillRect(p.x - barWidth/2, p.y - 35 * scale, barWidth * hpPct, 6);
+            ctx.strokeStyle = "black"; ctx.strokeRect(p.x - barWidth/2, p.y - 35 * scale, barWidth, 6);
         }
 
         function handleHit(p) {
-            // Verificar Escudo
-            if (p.shieldExpires > Date.now()) {
-                // Sonido visual de rebote (opcional)
-                return; // NO HACE DAÑO
-            }
+            if (p.shieldExpires > Date.now()) return;
 
             p.currentHp--;
             if (p.currentHp <= 0) {
@@ -544,7 +572,9 @@
                     p.currentHp = CONFIG.HP_PER_LIFE;
                     p.x = Math.random() * (canvas.width-50)+25;
                     p.y = Math.random() * (canvas.height-50)+25;
-                    p.shieldExpires = 0; // Perder escudo al morir (si lo tuviera por bug)
+                    p.shieldExpires = 0;
+                    p.isGiant = false;      // ✅ Perder poder al morir
+                    p.hasRapidFire = false; // ✅ Perder poder al morir
                 } else {
                     p.isDead = true;
                     db.ref(`salas/${roomId}/jugadores/${p.id}/status`).set('dead');
